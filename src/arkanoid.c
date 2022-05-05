@@ -100,6 +100,26 @@ int main() {
 	int score = 0;
 	int combo = 0;
 
+	Powerup powerup1 = {
+		{0, 0}, false,
+		0, 0, ST7735_RED
+	};
+
+	Powerup powerup2 = {
+		{0, 0}, false,
+		0, 0, ST7735_RED
+	};
+
+	Powerup powerup3 = {
+		{0, 0}, false,
+		0, 0, ST7735_RED
+	};
+
+	Powerup powerup4 = {
+		{0, 0}, false,
+		0, 0, ST7735_RED
+	};
+
 	sleep_ms(250);
 	ST7735_FillScreen(ST7735_BLACK);
 
@@ -117,7 +137,7 @@ int main() {
 			      {43, 120}, {43, 120}, {43, 120}, {43, 120}, {43, 120}, 
 			      {43, 120}, {43, 120}, {43, 120}, {43, 120}, {43, 120}, 
 			    },
-			    0, 1.8, 1, ST7735_CYAN, ST7735_BLUE
+			    0, 0.9, 1, ST7735_CYAN, ST7735_BLUE
 			};
 
 			Paddle playerPaddle = {
@@ -134,12 +154,51 @@ int main() {
 			    	blocks_left--;
 			    	combo++;
 			    	score += 100 * level * combo;
+
+			    	if (true) {
+			    		int x = (block_hit % 8) * 10 + 5;
+			    		int y = (block_hit / 8) * 4 + 2;
+
+			    		if (!powerup1.enabled) {
+			    			powerup1.enabled = true;
+			    			powerup1.curPos.x = x;
+			    			powerup1.curPos.y = y;
+
+			    			powerup1.speedY = 0.7f;
+			    			powerup1.type = 1;
+			    			powerup1.col = ST7735_RED;
+			    		} else if (!powerup2.enabled) {
+			    			powerup2.enabled = true;
+			    			powerup2.curPos.x = x;
+			    			powerup2.curPos.y = y;
+
+			    			powerup2.speedY = 0.7f;
+			    			powerup2.type = 1;
+			    			powerup2.col = ST7735_YELLOW;
+			    		} else if (!powerup3.enabled) {
+			    			powerup3.enabled = true;
+			    			powerup3.curPos.x = x;
+			    			powerup3.curPos.y = y;
+
+			    			powerup3.speedY = 0.7f;
+			    			powerup3.type = 1;
+			    			powerup3.col = ST7735_GREEN;
+			    		} else if (!powerup4.enabled) {
+			    			powerup4.enabled = true;
+			    			powerup4.curPos.x = x;
+			    			powerup4.curPos.y = y;
+
+			    			powerup4.speedY = 0.7f;
+			    			powerup4.type = 1;
+			    			powerup4.col = ST7735_CYAN;
+			    		}
+			    	}
 			    }
 
 			    // hit paddle
 			    if (block_hit == -2) {
 			    	combo = 0;
-			    	if (blocks_left <= 10) {
+			    	if (blocks_left <= 10 || gpio_get(BUTTON3) == 0) {
 			    		break;
 			    	}
 			    }
@@ -154,6 +213,56 @@ int main() {
 
 			    paddlePhysicsStep(&playerPaddle);
 			    drawPaddle(&playerPaddle);
+
+			    // put this into a function idiot
+			    if (powerup1.enabled) {
+			    	powerup1.curPos.y += powerup1.speedY;
+
+			    	ST7735_FillRectangle(powerup1.curPos.x - 1, powerup1.curPos.y - 3, 2, 2, ST7735_BLACK);
+
+			    	if (powerup1.curPos.y >= 158) {
+			    		powerup1.enabled = false;
+			    		ST7735_FillRectangle(powerup1.curPos.x - 1, powerup1.curPos.y - 1, 2, 2, ST7735_BLACK);
+			    	} else {
+				    	ST7735_FillRectangle(powerup1.curPos.x - 1, powerup1.curPos.y - 1, 2, 2, powerup1.col);
+				    }
+			    }
+
+			    if (powerup2.enabled) {
+			    	powerup2.curPos.y += powerup2.speedY;
+			    	ST7735_FillRectangle(powerup2.curPos.x - 1, powerup2.curPos.y - 3, 2, 2, ST7735_BLACK);
+			    	
+			    	if (powerup2.curPos.y >= 158) {
+			    		powerup2.enabled = false;
+			    		ST7735_FillRectangle(powerup2.curPos.x - 1, powerup2.curPos.y - 1, 2, 2, ST7735_BLACK);
+			    	} else {
+				    	ST7735_FillRectangle(powerup2.curPos.x - 1, powerup2.curPos.y - 1, 2, 2, powerup2.col);
+				    }
+			    }
+
+			    if (powerup3.enabled) {
+			    	powerup3.curPos.y += powerup3.speedY;
+			    	ST7735_FillRectangle(powerup3.curPos.x - 1, powerup3.curPos.y - 3, 2, 2, ST7735_BLACK);
+			    	
+			    	if (powerup3.curPos.y >= 158) {
+			    		powerup3.enabled = false;
+			    		ST7735_FillRectangle(powerup3.curPos.x - 1, powerup3.curPos.y - 1, 2, 2, ST7735_BLACK);
+			    	} else {
+				    	ST7735_FillRectangle(powerup3.curPos.x - 1, powerup3.curPos.y - 1, 2, 2, powerup3.col);
+				    }
+			    }
+
+			    if (powerup4.enabled) {
+			    	powerup4.curPos.y += powerup4.speedY;
+			    	ST7735_FillRectangle(powerup4.curPos.x - 1, powerup4.curPos.y - 3, 2, 2, ST7735_BLACK);
+			    	
+			    	if (powerup4.curPos.y >= 158) {
+			    		powerup4.enabled = false;
+			    		ST7735_FillRectangle(powerup4.curPos.x - 1, powerup4.curPos.y - 1, 2, 2, ST7735_BLACK);
+			    	} else {
+				    	ST7735_FillRectangle(powerup4.curPos.x - 1, powerup4.curPos.y - 1, 2, 2, powerup4.col);
+				    }
+			    }
 
 			    sprintf(bottom_text, "%d | %dx | LV %d    ", score, combo, level);
 				ST7735_WriteString(2, 150, Font4x6, bottom_text, ST7735_CYAN, ST7735_BLACK);
@@ -195,6 +304,11 @@ int main() {
 
 		score = 0;
 		combo = 0;
+
+		powerup1.enabled = false;
+		powerup2.enabled = false;
+		powerup3.enabled = false;
+		powerup4.enabled = false;
 
 		sleep_ms(250);
 		ST7735_FillScreen(ST7735_BLACK);

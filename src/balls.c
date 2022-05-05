@@ -35,6 +35,16 @@ typedef struct {
   int borderCol;
 } Paddle;
 
+typedef struct {
+  Coordinate curPos;
+
+  bool enabled;
+  float speedY;
+
+  int type;
+  int col;
+} Powerup;
+
 // Wrapper for drawing by coordinate
 void drawCoordPixel(Coordinate c, int col) {
   ST7735_DrawPixel((int)round(c.x), (int)round(c.y), col);
@@ -142,7 +152,7 @@ int ballPhysicsStep(Ball *ball, Paddle *paddle, uint16_t blocks[]) {
 
   // Finally, if the ball bounces on the paddle, we will make it bounce back.
   // y >= 150 and y <= 151
-  if (ball->curPos.y >= paddle->curPos.y && ball->curPos.y <= (paddle->curPos.y + 2)) {
+  if (ball->curPos.y >= paddle->curPos.y && ball->curPos.y <= (paddle->curPos.y + 4)) {
     int l_len = paddle->length / 2;
     int r_len = paddle->length - l_len;
     int left_x = paddle->curPos.x - l_len;
@@ -151,7 +161,7 @@ int ballPhysicsStep(Ball *ball, Paddle *paddle, uint16_t blocks[]) {
     if (ball->curPos.x >= left_x && ball->curPos.x <= right_x) {
       // bounce; reverse the movement then apply a change to x and y based on the difference from center
       // get magnitude (total speed of ball)
-      float ballMagnitude = sqrt(pow(ball->speedX, 2) + pow(ball->speedY, 2));
+      float ballMagnitude = sqrt(pow(ball->speedX, 2) + pow(ball->speedY, 2)) + 0.005f;
 
       // reverse movement
       ball->speedY *= -1; // always bounce vertically
