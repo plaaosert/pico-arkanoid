@@ -35,6 +35,74 @@ int set_level(uint16_t template[], uint16_t *copy_to) {
 	return blocks;
 }
 
+int update_powerup(Powerup *powerup, Paddle *paddle, Ball *ball, uint16_t blocks[]) {
+	int multiballs = 0;
+
+	if (powerup->enabled) {
+    	powerup->curPos.y += powerup->speedY;
+    	bool collected = false;
+
+    	if (powerup->curPos.y >= paddle->curPos.y && powerup->curPos.y <= (paddle->curPos.y + 3)) {
+    		collected = true;
+
+			int l_len = paddle->length / 2;
+		    int r_len = paddle->length - l_len;
+		    int left_x = paddle->curPos.x - l_len;
+		    int right_x = paddle->curPos.x + r_len;
+
+    		if (powerup->curPos.x >= left_x - 2 && powerup->curPos.x <= right_x + 2) {
+		    	switch (powerup->type) {
+		    		case PWR_GHOSTBALL:
+		    			if (!ball->drill) {
+							ball->headCol = ST7735_COLOR565(128, 128, 128);
+			    			ball->tailCol = ST7735_COLOR565(64, 64, 64);
+
+			    			ball->ghost = true;
+			    			break;
+			    		}
+
+		    		case PWR_DRILLBALL:
+		    			ball->headCol = ST7735_RED;
+		    			ball->tailCol = ST7735_COLOR565(0xdd, 0x9a, 0);
+
+		    			ball->drill = true;
+		    			ball->ghost = false;
+		    			break;
+
+		    		case PWR_SLOWBALL:
+		    			ball->speedX *= 0.8f;
+		    			ball->speedY *= 0.8f;
+		    			break;
+
+		    		case PWR_FASTBALL:
+		    			ball->speedX *= 1.2f;
+		    			ball->speedY *= 1.2f;
+		    			break;
+
+	    			case PWR_PADDLEBIG:
+	    				paddle->length += 4;
+	    				break;
+
+	    			case PWR_PADDLEFAST:
+	    				paddle->movespeed += 0.1f;
+	    				break;
+		    	}
+		    }
+		}
+
+		fill_under_blocks(powerup->curPos.x - 1, powerup->curPos.y - 3, 3, 3, blocks, ST7735_BLACK);
+
+    	if (powerup->curPos.y >= 158 || collected) {
+    		powerup->enabled = false;
+    		fill_under_blocks(powerup->curPos.x - 1, powerup->curPos.y - 1, 3, 3, blocks, ST7735_BLACK);
+    	} else {
+	    	fill_under_blocks(powerup->curPos.x - 1, powerup->curPos.y - 1, 3, 3, blocks, powerup->col);
+	    }
+    }
+
+    return multiballs;
+}
+
 void draw_blocks(uint16_t blocks[]) {
 	// our perspective is portrait, just like god intended
 	for (int y_index=0; y_index<20; y_index++) {
@@ -137,17 +205,18 @@ int main() {
 			      {43, 120}, {43, 120}, {43, 120}, {43, 120}, {43, 120}, 
 			      {43, 120}, {43, 120}, {43, 120}, {43, 120}, {43, 120}, 
 			    },
-			    0, 0.9, 1, ST7735_CYAN, ST7735_BLUE
+			    0, 0.9, 1, ST7735_CYAN, ST7735_BLUE,
+				false, false
 			};
 
 			Paddle playerPaddle = {
 				{40, 140},
-				24, 0, 0, 0.7, ST7735_WHITE, ST7735_CYAN
+				24, 0, 0, 0.4, 0.7, ST7735_WHITE, ST7735_CYAN
 			};
 
 			while (true) {
 			    int block_hit = ballPhysicsStep(&playerBall, &playerPaddle, blocks);
-			    finishBallMovement(&playerBall);
+			    finishBallMovement(&playerBall, blocks);
 			    if (block_hit >= 0) {
 			    	blocks[block_hit] = ST7735_BLACK;
 			    	draw_block(block_hit % 8, block_hit / 8, blocks[block_hit]);
@@ -165,7 +234,7 @@ int main() {
 			    			powerup1.curPos.y = y;
 
 			    			powerup1.speedY = 0.7f;
-			    			powerup1.type = 1;
+			    			powerup1.type = PWR_GHOSTBALL;
 			    			powerup1.col = ST7735_RED;
 			    		} else if (!powerup2.enabled) {
 			    			powerup2.enabled = true;
@@ -173,7 +242,7 @@ int main() {
 			    			powerup2.curPos.y = y;
 
 			    			powerup2.speedY = 0.7f;
-			    			powerup2.type = 1;
+			    			powerup2.type = PWR_DRILLBALL;
 			    			powerup2.col = ST7735_YELLOW;
 			    		} else if (!powerup3.enabled) {
 			    			powerup3.enabled = true;
@@ -204,65 +273,24 @@ int main() {
 			    }
 
 			    if (gpio_get(BUTTON1) == 0) {
-			    	playerPaddle.speedX -= 0.4;
+			    	playerPaddle.speedX -= playerPaddle.movespeed;
 			    }
 
 			    if (gpio_get(BUTTON2) == 0) {
-			    	playerPaddle.speedX += 0.4;
+			    	playerPaddle.speedX += playerPaddle.movespeed;
 			    }
 
 			    paddlePhysicsStep(&playerPaddle);
 			    drawPaddle(&playerPaddle);
 
-			    // put this into a function idiot
-			    if (powerup1.enabled) {
-			    	powerup1.curPos.y += powerup1.speedY;
+			    int multiballs = 0;
 
-			    	ST7735_FillRectangle(powerup1.curPos.x - 1, powerup1.curPos.y - 3, 2, 2, ST7735_BLACK);
+			    multiballs += update_powerup(&powerup1, &playerPaddle, &playerBall, blocks);
+			    multiballs += update_powerup(&powerup2, &playerPaddle, &playerBall, blocks);
+			    multiballs += update_powerup(&powerup3, &playerPaddle, &playerBall, blocks);
+			    multiballs += update_powerup(&powerup4, &playerPaddle, &playerBall, blocks);
 
-			    	if (powerup1.curPos.y >= 158) {
-			    		powerup1.enabled = false;
-			    		ST7735_FillRectangle(powerup1.curPos.x - 1, powerup1.curPos.y - 1, 2, 2, ST7735_BLACK);
-			    	} else {
-				    	ST7735_FillRectangle(powerup1.curPos.x - 1, powerup1.curPos.y - 1, 2, 2, powerup1.col);
-				    }
-			    }
-
-			    if (powerup2.enabled) {
-			    	powerup2.curPos.y += powerup2.speedY;
-			    	ST7735_FillRectangle(powerup2.curPos.x - 1, powerup2.curPos.y - 3, 2, 2, ST7735_BLACK);
-			    	
-			    	if (powerup2.curPos.y >= 158) {
-			    		powerup2.enabled = false;
-			    		ST7735_FillRectangle(powerup2.curPos.x - 1, powerup2.curPos.y - 1, 2, 2, ST7735_BLACK);
-			    	} else {
-				    	ST7735_FillRectangle(powerup2.curPos.x - 1, powerup2.curPos.y - 1, 2, 2, powerup2.col);
-				    }
-			    }
-
-			    if (powerup3.enabled) {
-			    	powerup3.curPos.y += powerup3.speedY;
-			    	ST7735_FillRectangle(powerup3.curPos.x - 1, powerup3.curPos.y - 3, 2, 2, ST7735_BLACK);
-			    	
-			    	if (powerup3.curPos.y >= 158) {
-			    		powerup3.enabled = false;
-			    		ST7735_FillRectangle(powerup3.curPos.x - 1, powerup3.curPos.y - 1, 2, 2, ST7735_BLACK);
-			    	} else {
-				    	ST7735_FillRectangle(powerup3.curPos.x - 1, powerup3.curPos.y - 1, 2, 2, powerup3.col);
-				    }
-			    }
-
-			    if (powerup4.enabled) {
-			    	powerup4.curPos.y += powerup4.speedY;
-			    	ST7735_FillRectangle(powerup4.curPos.x - 1, powerup4.curPos.y - 3, 2, 2, ST7735_BLACK);
-			    	
-			    	if (powerup4.curPos.y >= 158) {
-			    		powerup4.enabled = false;
-			    		ST7735_FillRectangle(powerup4.curPos.x - 1, powerup4.curPos.y - 1, 2, 2, ST7735_BLACK);
-			    	} else {
-				    	ST7735_FillRectangle(powerup4.curPos.x - 1, powerup4.curPos.y - 1, 2, 2, powerup4.col);
-				    }
-			    }
+			    // multiball code here
 
 			    sprintf(bottom_text, "%d | %dx | LV %d    ", score, combo, level);
 				ST7735_WriteString(2, 150, Font4x6, bottom_text, ST7735_CYAN, ST7735_BLACK);

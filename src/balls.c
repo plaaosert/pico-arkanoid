@@ -19,6 +19,9 @@ typedef struct {
 
   int headCol;
   int tailCol;
+
+  bool drill;
+  bool ghost;
 } Ball;
 
 typedef struct {
@@ -28,6 +31,8 @@ typedef struct {
 
   float speedX;
   float speedY;
+
+  float movespeed;
 
   float friction;
 
@@ -45,27 +50,7 @@ typedef struct {
   int col;
 } Powerup;
 
-// Wrapper for drawing by coordinate
-void drawCoordPixel(Coordinate c, int col) {
-  ST7735_DrawPixel((int)round(c.x), (int)round(c.y), col);
-}
-
-// http://rosettacode.org/wiki/Bitmap/Bresenham%27s_line_algorithm#C
-void drawCoordLine(int x0, int y0, int x1, int y1, int col) {
- 
-  int dx = abs(x1-x0), sx = x0<x1 ? 1 : -1;
-  int dy = abs(y1-y0), sy = y0<y1 ? 1 : -1; 
-  int err = (dx>dy ? dx : -dy)/2, e2;
- 
-  for(;;){
-    Coordinate coord = {x0, y0};
-    drawCoordPixel(coord, col);
-    if (x0==x1 && y0==y1) break;
-    e2 = err;
-    if (e2 >-dx) { err -= dy; x0 += sx; }
-    if (e2 < dy) { err += dx; y0 += sy; }
-  }
-}
+enum PowerupType {PWR_SLOWBALL, PWR_FASTBALL, PWR_PADDLEBIG, PWR_PADDLEFAST, PWR_DRILLBALL, PWR_GHOSTBALL};
 
 int findOverlappingBlock(int x, int y) {
   // Bounds from (0, 0) to (80, 80)
@@ -75,6 +60,48 @@ int findOverlappingBlock(int x, int y) {
   }
 
   return ((y / 4) * 8) + (x / 10);
+}
+
+void fill_under_blocks(int x, int y, int w, int h, uint16_t blocks[], uint16_t col) {
+  for (int xt=0; xt<w; xt++) {
+    for (int yt=0; yt<h; yt++) {
+      int block = findOverlappingBlock(x + xt, y + yt);
+      if (block == -1 || !blocks[block]) {
+        ST7735_DrawPixel(x + xt, y + yt, col);
+      }
+    }
+  }
+}
+
+void pixel_under_blocks(int x, int y, uint16_t blocks[], uint16_t col) {
+  fill_under_blocks(x, y, 1, 1, blocks, col);
+}
+
+// Wrapper for drawing by coordinate
+void drawCoordPixel(Coordinate c, int col) {
+  ST7735_DrawPixel((int)round(c.x), (int)round(c.y), col);
+}
+
+// Wrapper for drawing by coordinate
+void drawCoordPixelBlocks(Coordinate c, int col, uint16_t blocks[]) {
+  pixel_under_blocks((int)round(c.x), (int)round(c.y), blocks, col);
+}
+
+// http://rosettacode.org/wiki/Bitmap/Bresenham%27s_line_algorithm#C
+void drawCoordLine(int x0, int y0, int x1, int y1, uint16_t blocks[], int col) {
+ 
+  int dx = abs(x1-x0), sx = x0<x1 ? 1 : -1;
+  int dy = abs(y1-y0), sy = y0<y1 ? 1 : -1; 
+  int err = (dx>dy ? dx : -dy)/2, e2;
+ 
+  for(;;){
+    Coordinate coord = {x0, y0};
+    drawCoordPixelBlocks(coord, col, blocks);
+    if (x0==x1 && y0==y1) break;
+    e2 = err;
+    if (e2 >-dx) { err -= dy; x0 += sx; }
+    if (e2 < dy) { err += dx; y0 += sy; }
+  }
 }
 
 void paddlePhysicsStep(Paddle *paddle) {
@@ -101,6 +128,13 @@ void paddlePhysicsStep(Paddle *paddle) {
   }
 }
 
+void resetBallPositions(int x, int y, Ball *ball) {
+  for (int i=0; i<25; i++) {
+    ball->prevCoords[i].x = x;
+    ball->prevCoords[i].y = y;
+  }
+}
+
 // Update ball movement based on speed and do looping/bouncing
 // Test if in block position then bounce off the block if needed.
 // First, check if transgressing a bound, then see on which side that is happening (reverse both X and Y movement; check which one results in the ball no longer colliding)
@@ -116,9 +150,18 @@ int ballPhysicsStep(Ball *ball, Paddle *paddle, uint16_t blocks[]) {
   if (ball->curPos.y <= 0) {
     ball->curPos.y = 0;
     ball->speedY *= -1;
-  } else if (ball->curPos.y >= 159) {
-    ball->curPos.y = 159;
-    ball->speedY *= -1;
+
+    ball->ghost = false;
+    ball->drill = false;
+
+    ball->headCol = ST7735_CYAN;
+    ball->tailCol = ST7735_BLUE;
+  } else if (ball->curPos.y >= 200) {
+    ball->curPos.x = 43;
+    ball->curPos.y = 120;
+    resetBallPositions(43, 120, ball);
+    ball->speedY = 0.9f;
+    ball->speedX = 0;
   }
 
   if (ball->curPos.x <= 0) {
@@ -130,20 +173,22 @@ int ballPhysicsStep(Ball *ball, Paddle *paddle, uint16_t blocks[]) {
   }
 
   int blockOverlap = findOverlappingBlock(ball->curPos.x, ball->curPos.y);
-  if (blockOverlap != -1) {
+  if (blockOverlap != -1 && !ball->ghost) {
     if (blocks[blockOverlap]) {
       // there's something there.
       // Find block of previous coords in the y-position.
       // If, by reversing the y movement only, we find ourselves in a different block, the y-movement was what caused the bounce.
       int reverseYOverlap = findOverlappingBlock(ball->curPos.x, ball->prevCoords[0].y);
 
-      if (reverseYOverlap == blockOverlap) {
-        // the backtracking of Y did not cause our block to change, which means the X-movement was what got us in here.
-        // so, bounce X
-        ball->speedX *= -1;
-      } else {
-        // the backtracking of Y did cause the block to change, which means the Y-movement was what got us in here.
-        ball->speedY *= -1;
+      if (!ball->drill) {
+        if (reverseYOverlap == blockOverlap) {
+          // the backtracking of Y did not cause our block to change, which means the X-movement was what got us in here.
+          // so, bounce X
+          ball->speedX *= -1;
+        } else {
+          // the backtracking of Y did cause the block to change, which means the Y-movement was what got us in here.
+          ball->speedY *= -1;
+        }
       }
 
       return blockOverlap;
@@ -158,7 +203,7 @@ int ballPhysicsStep(Ball *ball, Paddle *paddle, uint16_t blocks[]) {
     int left_x = paddle->curPos.x - l_len;
     int right_x = paddle->curPos.x + r_len;
 
-    if (ball->curPos.x >= left_x && ball->curPos.x <= right_x) {
+    if (ball->curPos.x >= left_x - 2 && ball->curPos.x <= right_x + 2) {
       // bounce; reverse the movement then apply a change to x and y based on the difference from center
       // get magnitude (total speed of ball)
       float ballMagnitude = sqrt(pow(ball->speedX, 2) + pow(ball->speedY, 2)) + 0.005f;
@@ -212,7 +257,7 @@ void drawPaddle(Paddle *paddle) {
 }
 
 // Render ball position and update coordinate history
-void finishBallMovement(Ball *ball) {
+void finishBallMovement(Ball *ball, uint16_t blocks[]) {
   for (int i=1; i<25; i++) {
     //drawCoordPixel(ball->prevCoords[i], i == 24 ? ST7735_BLACK : ball->tailCol);
     Coordinate coordT = ball->prevCoords[i];
@@ -220,13 +265,13 @@ void finishBallMovement(Ball *ball) {
     int col = i==1 ? ball->headCol : (i==24 ? ST7735_BLACK : ball->tailCol);
 
     if (coordT.y >= 150 && coordO.y <= 10) {  // looping to the left (0), appearing on the right (159)
-        drawCoordLine(coordO.x, coordO.y, coordT.x, 0, col);
-        drawCoordLine(coordO.x, 159, coordT.x, coordT.y, col);
+        drawCoordLine(coordO.x, coordO.y, coordT.x, 0, blocks, col);
+        drawCoordLine(coordO.x, 159, coordT.x, coordT.y, blocks, col);
     } else if (coordT.y <= 10 && coordO.y >= 150) {  // lopoing to the right (159), appearing on the left (0)
-        drawCoordLine(coordO.x, coordO.y, coordT.x, 159, col);
-        drawCoordLine(coordO.x, 0, coordT.x, coordT.y, col);
+        drawCoordLine(coordO.x, coordO.y, coordT.x, 159, blocks, col);
+        drawCoordLine(coordO.x, 0, coordT.x, coordT.y, blocks, col);
     } else {
-        drawCoordLine(ball->prevCoords[i].x, ball->prevCoords[i].y, ball->prevCoords[i-1].x, ball->prevCoords[i-1].y, col);
+        drawCoordLine(ball->prevCoords[i].x, ball->prevCoords[i].y, ball->prevCoords[i-1].x, ball->prevCoords[i-1].y, blocks, col);
     }
   }
 
