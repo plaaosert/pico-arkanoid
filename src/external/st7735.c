@@ -202,20 +202,20 @@ static void ST7735_WriteChar(uint16_t x, uint16_t y, char ch, FontDef font, uint
 void ST7735_WriteString(uint16_t x, uint16_t y, const uint8_t *font, const char* str, uint16_t color, uint16_t bgcolor) {
     ST7735_Select();
 
-    int xt = 160 - x;
-
     while(*str) {
-        uint32_t i, b, j;
+        uint32_t fx, fy, b;
 
-        // This is all transposed which functionally means we'll be replacing y with x wherever necessary.
-        // This also means that we will be moving in a strange order, taking pixels in a different direction.
-        // Our font is designed to support this.
-        ST7735_SetAddressWindow(y, xt, y+5, xt+3);
+        // We are now trying to draw a transposed font the correct way round. Suffer.
+        ST7735_SetAddressWindow(x, y, x+3, y+5);
 
-        for(i = 0; i < 4; i++) {
-            b = font[((*str) - 32) + (i * 95)];
-            for(j = 0; j < 6; j++) {
-                if((b << j) & 0b100000)  {
+        for(fy = 0; fy < 6; fy++) {
+            for(fx = 0; fx < 4; fx++) {
+                // First line of the font.
+                int font_start_offset = ((*str) - 32);
+                b = font[font_start_offset + ((3 - fx) * 95)];  // Add 95 for each x-offset
+
+                // Shift by y-value
+                if((b << fy) & 0b100000)  {
                     uint8_t data[] = { color >> 8, color & 0xFF };
                     ST7735_WriteData(data, sizeof(data));
                 } else {
@@ -225,7 +225,7 @@ void ST7735_WriteString(uint16_t x, uint16_t y, const uint8_t *font, const char*
             }
         }
 
-        xt -= 5;
+        x += 5;
         str++;
     }
 
