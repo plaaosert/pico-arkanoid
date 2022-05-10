@@ -1,4 +1,3 @@
-# pico-arkanoid
-PICO ARKANOID BABY
+# task 2
 
-unasdlasd;loasdbnasdiuawbdl;awouidbawd;ioawbnd;iauhw
+pico arkanoid!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
